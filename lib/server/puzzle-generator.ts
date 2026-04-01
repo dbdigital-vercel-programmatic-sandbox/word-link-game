@@ -1,90 +1,9 @@
 import { Cell, Puzzle, PuzzleWord } from "@/lib/types"
 
 const SIZE = 9
-const DIRS: Array<[number, number]> = [
-  [-1, -1],
-  [-1, 0],
-  [-1, 1],
-  [0, -1],
-  [0, 1],
-  [1, -1],
-  [1, 0],
-  [1, 1],
-]
-
-function inBounds(row: number, col: number) {
-  return row >= 0 && row < SIZE && col >= 0 && col < SIZE
-}
 
 function key(c: Cell) {
   return `${c.row},${c.col}`
-}
-
-function neighbors(c: Cell, blocked: Set<string>) {
-  const out: Cell[] = []
-  for (const [dr, dc] of DIRS) {
-    const nr = c.row + dr
-    const nc = c.col + dc
-    if (inBounds(nr, nc) && !blocked.has(`${nr},${nc}`)) {
-      out.push({ row: nr, col: nc })
-    }
-  }
-  return out.sort(() => Math.random() - 0.5)
-}
-
-function findPath(
-  length: number,
-  blocked: Set<string>,
-  mustSpan?: "vertical" | "horizontal"
-) {
-  const starts: Cell[] = []
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (!blocked.has(`${r},${c}`)) {
-        starts.push({ row: r, col: c })
-      }
-    }
-  }
-  starts.sort(() => Math.random() - 0.5)
-
-  const dfs = (path: Cell[], used: Set<string>): Cell[] | null => {
-    if (path.length === length) {
-      if (!mustSpan) {
-        return path
-      }
-      const rows = new Set(path.map((p) => p.row))
-      const cols = new Set(path.map((p) => p.col))
-      const ok =
-        mustSpan === "vertical"
-          ? rows.has(0) && rows.has(SIZE - 1)
-          : cols.has(0) && cols.has(SIZE - 1)
-      return ok ? path : null
-    }
-
-    const current = path[path.length - 1]
-    const nexts = neighbors(current, blocked).filter((n) => !used.has(key(n)))
-    for (const nxt of nexts) {
-      used.add(key(nxt))
-      path.push(nxt)
-      const found = dfs(path, used)
-      if (found) {
-        return found
-      }
-      path.pop()
-      used.delete(key(nxt))
-    }
-    return null
-  }
-
-  for (const s of starts) {
-    const used = new Set<string>([key(s)])
-    const found = dfs([s], used)
-    if (found) {
-      return found
-    }
-  }
-
-  return null
 }
 
 function sanitizeWord(w: string) {
@@ -157,6 +76,25 @@ function buildWords(theme: string) {
   return out
 }
 
+function buildSnakePath() {
+  const cells: Cell[] = []
+
+  for (let col = 0; col < SIZE; col++) {
+    if (col % 2 === 0) {
+      for (let row = 0; row < SIZE; row++) {
+        cells.push({ row, col })
+      }
+      continue
+    }
+
+    for (let row = SIZE - 1; row >= 0; row--) {
+      cells.push({ row, col })
+    }
+  }
+
+  return cells
+}
+
 function validate(words: PuzzleWord[]) {
   const cells = new Set<string>()
   for (const w of words) {
@@ -200,65 +138,47 @@ function validate(words: PuzzleWord[]) {
 }
 
 export function generatePuzzle(theme: string, date: string): Puzzle {
-  for (let attempt = 0; attempt < 50; attempt++) {
-    const words = buildWords(theme)
-    if (!words) {
-      continue
-    }
-
-    const blocked = new Set<string>()
-    const placed: PuzzleWord[] = []
-    const axis = Math.random() > 0.5 ? "vertical" : "horizontal"
-
-    const spangramWord = words[0]
-    const spPath = findPath(spangramWord.length, blocked, axis)
-    if (!spPath) {
-      continue
-    }
-    for (const c of spPath) {
-      blocked.add(key(c))
-    }
-    placed.push({ word: spangramWord, isSpangram: true, path: spPath })
-
-    let fail = false
-    for (let i = 1; i < words.length; i++) {
-      const w = words[i]
-      const p = findPath(w.length, blocked)
-      if (!p) {
-        fail = true
-        break
-      }
-      for (const c of p) {
-        blocked.add(key(c))
-      }
-      placed.push({ word: w, isSpangram: false, path: p })
-    }
-
-    if (fail || blocked.size !== 81 || !validate(placed)) {
-      continue
-    }
-
-    const grid = Array.from({ length: SIZE }, () =>
-      Array.from({ length: SIZE }, () => "")
+  const words = buildWords(theme)
+  if (!words) {
+    throw new Error(
+      "Could not generate a valid puzzle for this theme. Try a different theme or fewer words."
     )
-    for (const w of placed) {
-      for (let i = 0; i < w.path.length; i++) {
-        const c = w.path[i]
-        grid[c.row][c.col] = w.word[i]
-      }
-    }
+  }
 
+  const path = buildSnakePath()
+  let cursor = 0
+  const placed: PuzzleWord[] = words.map((word, index) => {
+    const wordPath = path.slice(cursor, cursor + word.length)
+    cursor += word.length
     return {
-      date,
-      theme,
-      grid,
-      words: placed,
-      published: false,
-      status: "Draft",
+      word,
+      isSpangram: index === 0,
+      path: wordPath,
+    }
+  })
+
+  if (cursor !== SIZE * SIZE || !validate(placed)) {
+    throw new Error(
+      "Could not generate a valid puzzle for this theme. Try a different theme or fewer words."
+    )
+  }
+
+  const grid = Array.from({ length: SIZE }, () =>
+    Array.from({ length: SIZE }, () => "")
+  )
+  for (const w of placed) {
+    for (let i = 0; i < w.path.length; i++) {
+      const c = w.path[i]
+      grid[c.row][c.col] = w.word[i]
     }
   }
 
-  throw new Error(
-    "Could not generate a valid puzzle for this theme. Try a different theme or fewer words."
-  )
+  return {
+    date,
+    theme,
+    grid,
+    words: placed,
+    published: false,
+    status: "Draft",
+  }
 }
