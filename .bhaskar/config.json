@@ -1,9 +1,15 @@
 {
-    "version": "v1",
-    "ports": [
-      {
-        "port": 3000,
-        "label": "app"
-      }
-    ]
-  }
+  "version": "v1",
+  "ports": [
+    {
+      "port": 3000,
+      "label": "app",
+      "subdirectory": "/"
+    },
+    {
+      "port": 3000,
+      "label": "admin",
+      "subdirectory": "/admin"
+    }
+  ]
+}
