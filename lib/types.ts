@@ -13,6 +13,17 @@ export type Puzzle = {
   words: PuzzleWord[]
   published: boolean
   status: "Draft" | "Published"
+  adminStatus?: "draft" | "generated" | "validated"
+  metadata?: {
+    gridSize: 8
+    seed: string
+    attempts: number
+    qualityScore: number
+  }
+  validation?: {
+    valid: boolean
+    errors: string[]
+  }
 }
 
 export type UserRecord = {

@@ -1,8 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Input } from "@/components/ui/input"
+import {
+  getSolutionOverlayData,
+  normalizeAndFilterWords,
+} from "@/lib/admin/puzzle-workflow"
 import { Puzzle } from "@/lib/types"
 
 import { AppShell, Card, PrimaryButton, SecondaryButton } from "./dls-ui"
@@ -13,17 +17,42 @@ export function AdminPage() {
   const [theme, setTheme] = useState("Solar System")
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [customWords, setCustomWords] = useState("")
+  const [approvedWords, setApprovedWords] = useState<string[]>([])
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null)
+  const [showSolution, setShowSolution] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState("")
   const [scheduled, setScheduled] = useState<Scheduled[]>([])
   const [editingDate, setEditingDate] = useState<string | null>(null)
 
   const parseWords = () =>
-    customWords
-      .split(/[\n,]+/)
-      .map((w) => w.trim())
-      .filter(Boolean)
+    normalizeAndFilterWords(
+      customWords
+        .split(/[\n,]+/)
+        .map((w) => w.trim())
+        .filter(Boolean)
+    )
+
+  const solutionOverlay = useMemo(() => {
+    if (!puzzle) {
+      return { segments: [], highlights: [] }
+    }
+    return getSolutionOverlayData({
+      approvedWords: puzzle.words.map((w) => ({ word: w.word, path: w.path })),
+    })
+  }, [puzzle])
+
+  const highlightByCell = useMemo(() => {
+    const out = new Map<string, { word: string; step: number }>()
+    for (const highlight of solutionOverlay.highlights) {
+      const key = `${highlight.row},${highlight.col}`
+      if (!out.has(key)) {
+        out.set(key, { word: highlight.word, step: highlight.step })
+      }
+    }
+    return out
+  }, [solutionOverlay.highlights])
 
   const refreshScheduled = async () => {
     const data = await fetch("/api/admin/puzzles").then((r) => r.json())
@@ -58,26 +87,51 @@ export function AdminPage() {
       return
     }
     setCustomWords((data.words as string[]).join("\n"))
+    setApprovedWords([])
+  }
+
+  const approveWords = () => {
+    setError("")
+    const words = parseWords()
+    if (words.length < 8) {
+      setError("Please provide at least 8 words to approve.")
+      return
+    }
+    setApprovedWords(words)
   }
 
   const generate = async () => {
     setError("")
-    const words = parseWords()
-    const res = await fetch("/api/admin/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        theme,
-        date,
-        words: words.length ? words : undefined,
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error)
+    setIsGenerating(true)
+    const words = approvedWords.length ? approvedWords : parseWords()
+    if (!words.length) {
+      setError("Please approve words before generating the grid.")
+      setIsGenerating(false)
       return
     }
-    setPuzzle(data.puzzle)
+    try {
+      const res = await fetch("/api/admin/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          theme,
+          date,
+          words: words.length ? words : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error)
+        return
+      }
+      setPuzzle(data.puzzle)
+      setApprovedWords(data.puzzle.words.map((w: { word: string }) => w.word))
+      setShowSolution(false)
+    } catch {
+      setError("Could not generate puzzle")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const publish = async () => {
@@ -113,6 +167,46 @@ export function AdminPage() {
     setDate(existing.date)
     setEditingDate(existing.date)
     setCustomWords(existing.words.map((w) => w.word).join("\n"))
+    setApprovedWords(existing.words.map((w) => w.word))
+    setShowSolution(false)
+  }
+
+  const runSolarSystemDemo = async () => {
+    setTheme("Solar System")
+    setError("")
+    const wordsRes = await fetch("/api/admin/suggest-words", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: "Solar System" }),
+    })
+    const wordsData = await wordsRes.json()
+    if (!wordsRes.ok) {
+      setError(wordsData.error ?? "Could not run demo flow")
+      return
+    }
+    const demoWords = normalizeAndFilterWords(wordsData.words ?? []).slice(
+      0,
+      10
+    )
+    setCustomWords(demoWords.join("\n"))
+    setApprovedWords(demoWords)
+
+    const generateRes = await fetch("/api/admin/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        theme: "Solar System",
+        date,
+        words: demoWords,
+      }),
+    })
+    const generateData = await generateRes.json()
+    if (!generateRes.ok) {
+      setError(generateData.error ?? "Could not generate demo puzzle")
+      return
+    }
+    setPuzzle(generateData.puzzle)
+    setShowSolution(true)
   }
 
   return (
@@ -130,7 +224,7 @@ export function AdminPage() {
         />
         <div>
           <label className="mb-1 block text-sm font-semibold">
-            Custom Words (10 to 20 words)
+            Candidate Words (recommended 8 to 14)
           </label>
           <textarea
             value={customWords}
@@ -140,19 +234,53 @@ export function AdminPage() {
             className="w-full rounded-md border border-black bg-white px-3 py-2 text-sm"
           />
           <p className="mt-1 text-xs">
-            Optional. If provided, longest word becomes the spangram and the
-            system picks a subset that exactly fills 8x8.
+            Review and edit suggested words, then click Approve Words before
+            generating the 8x8 grid.
           </p>
         </div>
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-4">
           <SecondaryButton onClick={getSuggestions}>
             Suggest Themes
           </SecondaryButton>
           <SecondaryButton onClick={suggestWords}>
             Suggest Words
           </SecondaryButton>
-          <PrimaryButton onClick={generate}>Generate Puzzle</PrimaryButton>
+          <SecondaryButton onClick={approveWords}>
+            Approve Words
+          </SecondaryButton>
+          <PrimaryButton onClick={generate} disabled={isGenerating}>
+            {isGenerating ? "Generating..." : "Generate Grid"}
+          </PrimaryButton>
         </div>
+        <button
+          type="button"
+          onClick={() => void runSolarSystemDemo()}
+          className="text-sm font-semibold underline"
+        >
+          Run Solar System Demo Flow
+        </button>
+        {!!approvedWords.length && (
+          <div>
+            <p className="mb-2 text-sm font-semibold">
+              Approved Words ({approvedWords.length})
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {approvedWords.map((word) => (
+                <button
+                  type="button"
+                  key={word}
+                  className="rounded-full border border-black px-3 py-1 text-xs font-semibold"
+                  onClick={() =>
+                    setApprovedWords((prev) => prev.filter((w) => w !== word))
+                  }
+                  title="Remove approved word"
+                >
+                  {word} ×
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {!!suggestions.length && (
           <div className="flex flex-wrap gap-2">
             {suggestions.map((s) => (
@@ -185,21 +313,60 @@ export function AdminPage() {
               Editing existing puzzle for {editingDate}
             </p>
           )}
-          <div
-            className="mb-3 grid gap-1"
-            style={{
-              gridTemplateColumns: `repeat(${puzzle.grid[0]?.length ?? 8}, minmax(0, 1fr))`,
-            }}
-          >
-            {puzzle.grid.flatMap((row, r) =>
-              row.map((ch, c) => (
-                <div
-                  key={`${r}-${c}`}
-                  className="aspect-square rounded-md border border-black bg-white text-center text-sm leading-8 font-bold"
-                >
-                  {ch}
-                </div>
-              ))
+          <div className="relative mb-3">
+            <div
+              className="grid gap-1"
+              style={{
+                gridTemplateColumns: `repeat(${puzzle.grid[0]?.length ?? 8}, minmax(0, 1fr))`,
+              }}
+            >
+              {puzzle.grid.flatMap((row, r) =>
+                row.map((ch, c) => {
+                  const highlight = highlightByCell.get(`${r},${c}`)
+                  return (
+                    <div
+                      key={`${r}-${c}`}
+                      className={`relative aspect-square rounded-md border border-black text-center text-sm leading-8 font-bold ${showSolution && highlight ? "bg-amber-200" : "bg-white"}`}
+                    >
+                      {ch}
+                      {showSolution && highlight && (
+                        <span className="absolute top-0 left-1 text-[10px] font-bold">
+                          {highlight.step}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+            {showSolution && (
+              <svg
+                className="pointer-events-none absolute inset-0 h-full w-full"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+              >
+                {solutionOverlay.segments.map((segment, index) => {
+                  const cols = puzzle.grid[0]?.length ?? 8
+                  const rows = puzzle.grid.length || 8
+                  const x1 = ((segment.from.col + 0.5) / cols) * 100
+                  const y1 = ((segment.from.row + 0.5) / rows) * 100
+                  const x2 = ((segment.to.col + 0.5) / cols) * 100
+                  const y2 = ((segment.to.row + 0.5) / rows) * 100
+                  const hue = (index * 37) % 360
+                  return (
+                    <line
+                      key={`${segment.word}-${segment.order}-${index}`}
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke={`hsl(${hue} 80% 42%)`}
+                      strokeWidth={1.2}
+                      strokeLinecap="round"
+                    />
+                  )
+                })}
+              </svg>
             )}
           </div>
           <div className="mb-3 flex flex-wrap gap-2">
@@ -215,6 +382,26 @@ export function AdminPage() {
           <p className="mb-2 text-sm font-semibold">
             Words in puzzle: {puzzle.words.length}
           </p>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-black px-3 py-1 text-sm font-semibold"
+              onClick={() => setShowSolution((prev) => !prev)}
+            >
+              {showSolution ? "Hide Solution" : "Check Grid"}
+            </button>
+            <span className="text-xs">
+              {puzzle.validation?.valid
+                ? "Validation: passed"
+                : `Validation: ${puzzle.validation?.errors?.[0] ?? "pending"}`}
+            </span>
+            {puzzle.metadata && (
+              <span className="text-xs">
+                attempts: {puzzle.metadata.attempts}, quality:{" "}
+                {puzzle.metadata.qualityScore}
+              </span>
+            )}
+          </div>
           <div className="mb-2">
             <label className="mb-1 block text-sm font-semibold">
               Publish Date
