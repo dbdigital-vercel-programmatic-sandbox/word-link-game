@@ -2,7 +2,9 @@ import { computeStreak } from "@/lib/server/streak"
 import { ymdFromOffset, todayUtcYmd } from "@/lib/server/date"
 import { generatePuzzle } from "@/lib/server/puzzle-generator"
 import { store } from "@/lib/server/store"
+import { isRecognizedBonusWord } from "@/lib/server/word-check"
 import { Cell, CompletionEntry, Puzzle } from "@/lib/types"
+import { isValidPath } from "@/lib/game"
 
 export function ensureTodayPuzzle(theme = "Solar System") {
   const date = todayUtcYmd()
@@ -38,12 +40,63 @@ function samePath(a: Cell[], b: Cell[]) {
 }
 
 export function validateTrace(puzzle: Puzzle, path: Cell[]) {
-  for (const w of puzzle.words) {
-    if (samePath(w.path, path) || samePath([...w.path].reverse(), path)) {
-      return { valid: true, word: w.word, isSpangram: w.isSpangram }
+  if (!path.length || !isValidPath(path)) {
+    return { valid: false, kind: "invalid" as const }
+  }
+
+  for (const c of path) {
+    if (
+      c.row < 0 ||
+      c.row >= puzzle.grid.length ||
+      c.col < 0 ||
+      c.col >= (puzzle.grid[c.row]?.length ?? 0)
+    ) {
+      return { valid: false, kind: "invalid" as const }
     }
   }
-  return { valid: false }
+
+  for (const w of puzzle.words) {
+    if (samePath(w.path, path) || samePath([...w.path].reverse(), path)) {
+      return {
+        valid: true,
+        kind: "answer" as const,
+        word: w.word,
+        isSpangram: w.isSpangram,
+      }
+    }
+  }
+
+  const tracedWord = path.map((c) => puzzle.grid[c.row][c.col]).join("")
+  if (isRecognizedBonusWord(puzzle, tracedWord)) {
+    return {
+      valid: false,
+      kind: "bonus" as const,
+      word: tracedWord,
+    }
+  }
+
+  return { valid: false, kind: "invalid" as const }
+}
+
+export function getHintWord(args: {
+  puzzle: Puzzle
+  foundWords: string[]
+  hintedWords: string[]
+}) {
+  const blocked = new Set(
+    [...args.foundWords, ...args.hintedWords].map((w) => w.toUpperCase())
+  )
+
+  const nonSpangram = args.puzzle.words.find(
+    (w) => !w.isSpangram && !blocked.has(w.word.toUpperCase())
+  )
+  if (nonSpangram) {
+    return nonSpangram
+  }
+
+  return (
+    args.puzzle.words.find((w) => !blocked.has(w.word.toUpperCase())) ?? null
+  )
 }
 
 export function completePuzzle(args: {

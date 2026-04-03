@@ -3,14 +3,20 @@ import { NextRequest, NextResponse } from "next/server"
 import { generatePuzzle } from "@/lib/server/puzzle-generator"
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as { theme: string; date?: string }
+  const body = (await request.json()) as {
+    theme: string
+    date?: string
+    words?: string[]
+  }
   if (!body.theme) {
     return NextResponse.json({ error: "Theme is required" }, { status: 400 })
   }
 
   try {
     const date = body.date ?? new Date().toISOString().slice(0, 10)
-    const puzzle = generatePuzzle(body.theme, date)
+    const puzzle = generatePuzzle(body.theme, date, {
+      candidateWords: body.words,
+    })
     return NextResponse.json({ puzzle })
   } catch (error) {
     return NextResponse.json(

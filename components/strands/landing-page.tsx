@@ -13,21 +13,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { DLS, USER_ID_STORAGE_KEY } from "@/lib/dls"
 
-import {
-  AppShell,
-  Card,
-  Icon,
-  PrimaryButton,
-  SecondaryButton,
-  TopNav,
-} from "./dls-ui"
-
-type TodayPuzzle = {
-  date: string
-  theme: string
-  grid: string[][]
-  wordsCount: number
-}
+import { AppShell, Card, Icon, PrimaryButton, SecondaryButton } from "./dls-ui"
 
 function Step({ title, body }: { title: string; body: string }) {
   return (
@@ -90,7 +76,6 @@ function MiniDemo() {
 }
 
 export function LandingPage() {
-  const [puzzle, setPuzzle] = useState<TodayPuzzle | null>(null)
   const [identity, setIdentity] = useState<{
     userId: string
     displayName: string
@@ -98,7 +83,6 @@ export function LandingPage() {
     completedDates: string[]
   } | null>(null)
   const [displayName, setDisplayName] = useState("")
-  const [alreadyDone, setAlreadyDone] = useState(false)
 
   useEffect(() => {
     const run = async () => {
@@ -112,27 +96,9 @@ export function LandingPage() {
       localStorage.setItem(USER_ID_STORAGE_KEY, initData.userId)
       setIdentity(initData)
       setDisplayName(initData.displayName)
-
-      const p = await fetch("/api/puzzle/today").then((r) => r.json())
-      setPuzzle(p)
-
-      const doneDate = localStorage.getItem("strand_last_result_date")
-      setAlreadyDone(doneDate === p.date)
     }
     void run()
   }, [])
-
-  const publishDate = !puzzle?.date
-    ? ""
-    : new Date(`${puzzle.date}T00:00:00`).toLocaleDateString(undefined, {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-      })
-
-  const streakLine = identity?.streak
-    ? `You're on a ${identity.streak}-day streak!`
-    : "Start your streak today!"
 
   const saveDisplayName = async () => {
     if (!identity) {
@@ -167,14 +133,14 @@ export function LandingPage() {
 
   return (
     <AppShell>
-      <TopNav title="Strands Daily" />
-
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-center">
+        <div />
+        <h1 className="text-center text-3xl font-bold">Word Connect</h1>
         <Drawer>
           <DrawerTrigger asChild>
             <button
               type="button"
-              className="rounded-full bg-black p-2 text-white"
+              className="justify-self-end rounded-full bg-black p-2 text-white"
               aria-label="settings"
             >
               <Icon src={DLS.assets.settings} alt="settings" size={20} />
@@ -200,25 +166,18 @@ export function LandingPage() {
       </div>
 
       <Card className="mb-4 space-y-3">
-        <p className="text-sm font-semibold">Theme of the Day</p>
-        <h1 className="text-3xl font-bold">{puzzle?.theme ?? "Loading..."}</h1>
-        <p className="text-sm">{publishDate}</p>
-        {alreadyDone ? (
-          <PrimaryButton href="/results">View Your Results</PrimaryButton>
-        ) : (
-          <PrimaryButton href="/play">Play Today&apos;s Puzzle</PrimaryButton>
-        )}
+        <PrimaryButton href="/play">Play Today&apos;s Puzzle</PrimaryButton>
+        <p className="text-center font-semibold">Start your streak today!</p>
       </Card>
 
-      <Card className="mb-4 flex items-center gap-2">
-        <Icon src={DLS.assets.fire} alt="fire" size={18} />
-        <p className="font-semibold">{streakLine}</p>
-      </Card>
+      <div className="mb-4">
+        <SecondaryButton href="/leaderboard">View Leaderboard</SecondaryButton>
+      </div>
 
       <Card className="mb-4" id="how-to-play">
         <h2 className="mb-3 text-xl font-semibold">How to Play</h2>
         <div className="space-y-2">
-          <Step title="Step 1" body="Find words hidden in the 9x9 grid." />
+          <Step title="Step 1" body="Find words hidden in the 8x8 grid." />
           <Step
             title="Step 2"
             body="Tap a letter and drag through adjacent letters in any of 8 directions."
@@ -256,8 +215,6 @@ export function LandingPage() {
           Reset My Data
         </button>
       </footer>
-      <div className="h-3" />
-      <SecondaryButton href="/leaderboard">View Leaderboard</SecondaryButton>
     </AppShell>
   )
 }
