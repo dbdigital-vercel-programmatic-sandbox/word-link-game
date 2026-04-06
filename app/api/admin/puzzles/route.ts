@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   const puzzles = Array.from(store.puzzles.values()).map((p) => ({
     date: p.date,
     theme: p.theme,
+    themeDisplayTitle: p.themeDisplayTitle,
     status: p.status,
   }))
   puzzles.sort((a, b) => a.date.localeCompare(b.date))

@@ -11,6 +11,7 @@ import { generateThemeWords } from "@/lib/admin/theme-word-generation"
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as {
     theme: string
+    themeDisplayTitle?: string
     date?: string
     words?: string[]
   }
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const date = body.date ?? new Date().toISOString().slice(0, 10)
+    const themeDisplayTitle = body.themeDisplayTitle?.trim() || body.theme
     const generatedThemeWords = body.words?.length
       ? null
       : await generateThemeWords(body.theme, {
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
     const puzzle = {
       date,
       theme: body.theme,
+      themeDisplayTitle,
       grid: generated.grid,
       words: toPuzzleWords(generated.approvedWords),
       published: false,

@@ -11,10 +11,16 @@ import { Puzzle } from "@/lib/types"
 
 import { AppShell, Card, PrimaryButton, SecondaryButton } from "./dls-ui"
 
-type Scheduled = { date: string; theme: string; status: string }
+type Scheduled = {
+  date: string
+  theme: string
+  themeDisplayTitle: string
+  status: string
+}
 
 export function AdminPage() {
   const [theme, setTheme] = useState("Solar System")
+  const [themeDisplayTitle, setThemeDisplayTitle] = useState("सौर मंडल")
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [customWords, setCustomWords] = useState("")
   const [approvedWords, setApprovedWords] = useState<string[]>([])
@@ -115,6 +121,7 @@ export function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           theme,
+          themeDisplayTitle,
           date,
           words: words.length ? words : undefined,
         }),
@@ -164,6 +171,7 @@ export function AdminPage() {
     const existing = data.puzzle as Puzzle
     setPuzzle(existing)
     setTheme(existing.theme)
+    setThemeDisplayTitle(existing.themeDisplayTitle ?? existing.theme)
     setDate(existing.date)
     setEditingDate(existing.date)
     setCustomWords(existing.words.map((w) => w.word).join("\n"))
@@ -173,6 +181,7 @@ export function AdminPage() {
 
   const runSolarSystemDemo = async () => {
     setTheme("Solar System")
+    setThemeDisplayTitle("सौर मंडल")
     setError("")
     const wordsRes = await fetch("/api/admin/suggest-words", {
       method: "POST",
@@ -196,6 +205,7 @@ export function AdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         theme: "Solar System",
+        themeDisplayTitle: "सौर मंडल",
         date,
         words: demoWords,
       }),
@@ -220,7 +230,12 @@ export function AdminPage() {
         <Input
           value={theme}
           onChange={(e) => setTheme(e.target.value)}
-          placeholder="Enter theme"
+          placeholder="Enter theme in English"
+        />
+        <Input
+          value={themeDisplayTitle}
+          onChange={(e) => setThemeDisplayTitle(e.target.value)}
+          placeholder="Theme Display title in Hindi"
         />
         <div>
           <label className="mb-1 block text-sm font-semibold">
@@ -306,7 +321,7 @@ export function AdminPage() {
       {puzzle && (
         <Card className="mb-4">
           <h2 className="mb-2 text-xl font-semibold">
-            Preview: {puzzle.theme}
+            Preview: {puzzle.themeDisplayTitle || puzzle.theme}
           </h2>
           {editingDate && (
             <p className="mb-2 text-sm font-semibold">
@@ -428,7 +443,7 @@ export function AdminPage() {
               className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2 rounded-md bg-white px-2 py-2"
             >
               <span>{p.date}</span>
-              <span>{p.theme}</span>
+              <span>{p.themeDisplayTitle || p.theme}</span>
               <span>{p.status}</span>
               <SecondaryButton onClick={() => void editPuzzle(p.date)}>
                 Edit

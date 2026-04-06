@@ -11,6 +11,7 @@ export async function GET() {
   return NextResponse.json({
     date: puzzle.date,
     theme: puzzle.theme,
+    themeDisplayTitle: puzzle.themeDisplayTitle,
     grid: puzzle.grid,
     wordsCount: puzzle.words.length,
   })

@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
   }
 
   body.puzzle.date = body.date
+  body.puzzle.themeDisplayTitle =
+    body.puzzle.themeDisplayTitle?.trim() || body.puzzle.theme
   body.puzzle.published = true
   body.puzzle.status = "Published"
   store.puzzles.set(body.date, body.puzzle)

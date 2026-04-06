@@ -9,6 +9,7 @@ export type PuzzleWord = {
 export type Puzzle = {
   date: string
   theme: string
+  themeDisplayTitle: string
   grid: string[][]
   words: PuzzleWord[]
   published: boolean

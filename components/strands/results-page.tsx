@@ -10,6 +10,7 @@ import { AppShell, Card, Icon, PrimaryButton, SecondaryButton } from "./dls-ui"
 
 type ResultData = {
   theme: string
+  themeDisplayTitle?: string
   timeSeconds: number
   wordsFound: number
   totalWords: number
@@ -74,7 +75,7 @@ export function ResultsPage() {
       return
     }
     const text = [
-      `Strands Daily: ${data.theme}`,
+      `Strands Daily: ${data.themeDisplayTitle ?? data.theme}`,
       `Time: ${mmss(data.timeSeconds)}`,
       `Streak: ${data.streak}`,
       `Rank: #${data.rank}`,
@@ -95,7 +96,9 @@ export function ResultsPage() {
           <Icon src={DLS.assets.trophy} alt="trophy" size={72} />
         </div>
         <h1 className="text-3xl font-bold">Puzzle Complete!</h1>
-        <p className="text-base">{data?.theme ?? ""}</p>
+        <p className="text-base">
+          {data?.themeDisplayTitle ?? data?.theme ?? ""}
+        </p>
         <p className="text-lg font-semibold">
           Completed in {mmss(data?.timeSeconds ?? 0)}
         </p>

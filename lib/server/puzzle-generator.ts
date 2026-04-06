@@ -580,6 +580,7 @@ export function generatePuzzle(
     return {
       date,
       theme,
+      themeDisplayTitle: theme,
       grid,
       words: placed,
       published: false,

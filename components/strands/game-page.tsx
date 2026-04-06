@@ -14,6 +14,7 @@ import { AppShell, Card, Icon } from "./dls-ui"
 type PuzzlePayload = {
   date: string
   theme: string
+  themeDisplayTitle: string
   grid: string[][]
   wordsCount: number
 }
@@ -56,16 +57,19 @@ export function GamePage() {
   useEffect(() => {
     const init = async () => {
       const stored = localStorage.getItem(USER_ID_STORAGE_KEY)
-      if (!stored) {
-        router.push("/")
-        return
-      }
-      setUserId(stored)
+      const initRes = await fetch("/api/user/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(stored ? { userId: stored } : {}),
+      })
+      const initData = await initRes.json()
+      localStorage.setItem(USER_ID_STORAGE_KEY, initData.userId)
+      setUserId(initData.userId)
       const data = await fetch("/api/puzzle/today").then((r) => r.json())
       setPuzzle(data)
     }
     void init()
-  }, [router])
+  }, [])
 
   useEffect(() => {
     if (!running) {
@@ -117,6 +121,7 @@ export function GamePage() {
         "strand_last_result",
         JSON.stringify({
           theme: puzzle.theme,
+          themeDisplayTitle: puzzle.themeDisplayTitle ?? puzzle.theme,
           timeSeconds: timer,
           wordsFound: foundWords.length,
           totalWords: puzzle.wordsCount,
@@ -390,7 +395,7 @@ export function GamePage() {
 
       <Card className="mb-3">
         <h1 className="text-center text-2xl font-bold">
-          {puzzle?.theme ?? "Loading..."}
+          {puzzle?.themeDisplayTitle ?? puzzle?.theme ?? "Loading..."}
         </h1>
       </Card>
 
